@@ -1,28 +1,27 @@
 "use client";
 
-import { useState } from "react";
-import {TreeNode} from "./components/TreeNode";
+import { ReactNode, useEffect, useState } from "react";
+import {TreeNode, get_node} from "./components/TreeNode";
+import { invoke } from "@tauri-apps/api/tauri";
+import { UpdateProvider } from "./components/UpdateContext";
 
-const get_shared_state = ()=>{
-  
-}
+
 
 export default function Page() {
-  // Hardcoded initial data
-  const [treeData, setTreeData] = useState({
-    id: 1,
-    name: "Root Node",
-    isParent: true,
-    children: [
-      { id: 2, name: "Child 1", isParent: false },
-      { id: 3, name: "Child 2", isParent: true, children: [] },
-    ],
-  });
-
+  const [rootNode, setRootNode] = useState<ReactNode | null>(null);
+  useEffect(() => {
+    const get_root_node = async () => {
+      let root_name = await invoke<string>("query_root_name");
+      setRootNode(await get_node(root_name));
+    }
+    get_root_node();
+  }, [])
   return (
     <div className="p-4">
-      <h1 className="text-xl font-bold mb-4">Tree View (Hardcoded)</h1>
-      {treeData && <TreeNode {...treeData} />}
+      <h1 className="text-xl font-bold mb-4">Tree View</h1>
+      <UpdateProvider>
+        {rootNode}
+      </UpdateProvider>
     </div>
   );
 }
