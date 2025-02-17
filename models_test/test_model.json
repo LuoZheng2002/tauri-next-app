@@ -1,0 +1,17 @@
+[
+    {
+        "name": "A",
+        "children": ["B", "C"],
+        "algorithm": "算法A"
+    },
+    {
+        "name": "B",
+        "children": ["D"],
+        "algorithm": "算法B"
+    },
+    {
+        "name": "C",
+        "children": ["E"],
+        "algorithm": "算法C"
+    }
+]

@@ -46,8 +46,8 @@ struct TauriState {
 // all the children are queried
 fn main() {
     println!("Current Directory: {:?}", std::env::current_dir().unwrap());
-    let models_dir = "../models_test".to_string();
-    let models = match load_models(models_dir) {
+    let models_file_path = "../models/model.json".to_string();
+    let models = match load_models(models_file_path) {
         Ok(models) => models,
         Err(e) => {
             eprintln!("Error: {}", e);
@@ -78,31 +78,16 @@ fn main() {
         .expect("error while running tauri application");
 }
 
-fn load_models(dir: String) -> Result<HashMap<String, Model>> {
-    let mut file_models = fs::read_dir(dir.clone())
-        .context(format!("未找到模型路径：{}", dir))?
-        .map(|entry| entry.context("路径入口错误")) // Get Result<Result<DirEntry>>
-        .collect::<Result<Vec<_>, _>>()? // short circuit error handling
-        .iter()
-        .map(|entry| entry.path()) // Get file paths
-        .filter(|path| path.is_file()) // Keep only files
-        .map(|path| {
-            let content = fs::read_to_string(&path)
-                .context(format!("读取模型文件{:?}错误", path.file_name()))?;
-            let model = serde_json::from_str::<FileModel>(&content).context("解析模型文件错误")?;
-            // 目前模型文件中一定有children和algorithm字段，无children的模型不另起文件单独存放
-            if model.children.is_none(){
-                Err(anyhow::anyhow!("模型文件{:?}中未找到children字段", path.file_name()))?;
-            }
-            if model.algorithm.is_none(){
-                Err(anyhow::anyhow!("模型文件{:?}中未找到algorithm字段", path.file_name()))?;
-            }
-            Ok((model.name.clone(), model))
-        }) // Read file content
-        .collect::<Result<HashMap<_, _>>>()?; // short circuit error handling
+fn load_models(file_path: String) -> Result<HashMap<String, Model>>{
+    let content = fs::read_to_string(&file_path)
+        .context(format!("读取模型文件{:?}错误", file_path))?;
+    let models = serde_json::from_str::<Vec<FileModel>>(&content).context("解析模型文件错误")?;
+    let mut models: HashMap<String, FileModel> = models.into_iter().map(|model|{
+        (model.name.clone(), model)
+    }).collect();
     // 遍历所有模型及其children，将所有名字放入集合中
     let mut names = HashSet::new();
-    file_models.iter().for_each(|(_name, model)| {
+    models.iter().for_each(|(_name, model)| {
         names.insert(model.name.clone());
         if let Some(children) = &model.children {
             children.iter().for_each(|child| {
@@ -112,14 +97,14 @@ fn load_models(dir: String) -> Result<HashMap<String, Model>> {
     });
     // 在原有模型集合的基础上加入叶节点模型
     names.iter().for_each(|name| {
-        if !file_models.contains_key(name) {
-            file_models.insert(name.clone(), FileModel{name: name.clone(), algorithm: None, children: None});
+        if !models.contains_key(name) {
+            models.insert(name.clone(), FileModel{name: name.clone(), algorithm: None, children: None});
         }
     });
-    let mut ref_counts = file_models.iter().map::<(String, u64), _>(|(name, _model)| {
+    let mut ref_counts = models.iter().map::<(String, u64), _>(|(name, _model)| {
         (name.to_string(), 0)
     }).collect::<HashMap<String, u64>>();
-    file_models.iter().for_each(|(_name, model)| {
+    models.iter().for_each(|(_name, model)| {
         if let Some(children) = &model.children {
             children.iter().for_each(|child| {
                 let count = ref_counts.get(child).expect(format!("child {} does not exist in ref count", child).as_str());
@@ -127,11 +112,67 @@ fn load_models(dir: String) -> Result<HashMap<String, Model>> {
             });
         }
     });
-    let result = file_models.into_iter().map::<(String, Model),_>(|(name, model)| {
+    let models = models.into_iter().map::<(String, Model),_>(|(name, model)| {
         (name.clone(), Model{name: model.name, algorithm: model.algorithm, children: model.children, ref_count: ref_counts.get(&name).expect("model does not exist in ref count").clone()})
     }).collect();
-    Ok(result)
+    Ok(models)
 }
+
+
+// fn load_models(dir: String) -> Result<HashMap<String, Model>> {
+//     let mut file_models = fs::read_dir(dir.clone())
+//         .context(format!("未找到模型路径：{}", dir))?
+//         .map(|entry| entry.context("路径入口错误")) // Get Result<Result<DirEntry>>
+//         .collect::<Result<Vec<_>, _>>()? // short circuit error handling
+//         .iter()
+//         .map(|entry| entry.path()) // Get file paths
+//         .filter(|path| path.is_file()) // Keep only files
+//         .map(|path| {
+//             let content = fs::read_to_string(&path)
+//                 .context(format!("读取模型文件{:?}错误", path.file_name()))?;
+//             let model = serde_json::from_str::<FileModel>(&content).context("解析模型文件错误")?;
+//             // 目前模型文件中一定有children和algorithm字段，无children的模型不另起文件单独存放
+//             if model.children.is_none(){
+//                 Err(anyhow::anyhow!("模型文件{:?}中未找到children字段", path.file_name()))?;
+//             }
+//             if model.algorithm.is_none(){
+//                 Err(anyhow::anyhow!("模型文件{:?}中未找到algorithm字段", path.file_name()))?;
+//             }
+//             Ok((model.name.clone(), model))
+//         }) // Read file content
+//         .collect::<Result<HashMap<_, _>>>()?; // short circuit error handling
+//     // 遍历所有模型及其children，将所有名字放入集合中
+//     let mut names = HashSet::new();
+//     file_models.iter().for_each(|(_name, model)| {
+//         names.insert(model.name.clone());
+//         if let Some(children) = &model.children {
+//             children.iter().for_each(|child| {
+//                 names.insert(child.clone());
+//             });
+//         }
+//     });
+//     // 在原有模型集合的基础上加入叶节点模型
+//     names.iter().for_each(|name| {
+//         if !file_models.contains_key(name) {
+//             file_models.insert(name.clone(), FileModel{name: name.clone(), algorithm: None, children: None});
+//         }
+//     });
+//     let mut ref_counts = file_models.iter().map::<(String, u64), _>(|(name, _model)| {
+//         (name.to_string(), 0)
+//     }).collect::<HashMap<String, u64>>();
+//     file_models.iter().for_each(|(_name, model)| {
+//         if let Some(children) = &model.children {
+//             children.iter().for_each(|child| {
+//                 let count = ref_counts.get(child).expect(format!("child {} does not exist in ref count", child).as_str());
+//                 ref_counts.insert(child.clone(), count + 1);
+//             });
+//         }
+//     });
+//     let result = file_models.into_iter().map::<(String, Model),_>(|(name, model)| {
+//         (name.clone(), Model{name: model.name, algorithm: model.algorithm, children: model.children, ref_count: ref_counts.get(&name).expect("model does not exist in ref count").clone()})
+//     }).collect();
+//     Ok(result)
+// }
 
 // program logic:
 // 1. load all model files from a specified folder into a hashmap, with root as a special element
