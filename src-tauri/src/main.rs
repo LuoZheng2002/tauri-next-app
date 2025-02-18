@@ -47,6 +47,7 @@ struct TauriState {
 fn main() {
     println!("Current Directory: {:?}", std::env::current_dir().unwrap());
     let models_file_path = "../models/model.json".to_string();
+    let root_name = "健康指数".to_string();
     let models = match load_models(models_file_path) {
         Ok(models) => models,
         Err(e) => {
@@ -54,7 +55,7 @@ fn main() {
             exit(1);
         }
     };
-    let root_name = "A".to_string();
+    
     models.iter().for_each(|(name, model)| {
         println!("模型{}：算法: {:?}，子节点: {:?}，引用计数: {}", name, model.algorithm, model.children, model.ref_count);
     });

@@ -21,7 +21,7 @@ interface TreeNodeProps {
   // refreshTree: () => void; // Function to re-fetch data from backend
 }
 
-export const get_node = async (name: string, parent: string): Promise<ReactNode> => {
+export const get_node = async (name: string, parent: string|null): Promise<ReactNode> => {
   await invoke("log", {message: "getting node: " + name});
   return invoke<any>("query_node", { name: name }).then((node) => {
     const id = generateIndex();
